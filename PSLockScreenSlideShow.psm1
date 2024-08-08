@@ -1,6 +1,75 @@
 ﻿
 $Script:ModuleName = (Get-Item -Path $PSCommandPath).BaseName
 
+<#
+.SYNOPSIS
+
+Get PSLockScreenSlideShow images from path
+
+.DESCRIPTION
+
+Get PSLockScreenSlideShow images from path and return a list of objects with Path, Time, Unit properties.
+
+The result can directly be piped to Start-PSLockScreenSlideShow (e.g. see PSLockScreenSlideShow.ps1)
+
+.PARAMETER Path
+
+Specifiy the path where to load the LockScreen images from
+
+Defaults to C:\ProgramData\PSLockScreenSlideShow
+
+Files are NOT loaded recursively, but sorted by name to force a consistent order
+
+.PARAMETER Time
+
+The time each slideshow image will be shown if no time can be extracted from filename by parameter TimeRegEx
+
+Defaults to "5s"
+
+.PARAMETER TimeRegEx
+
+Defaults to "^.*\W(?<Time>\d{1,})(?<Unit>ms|s)$" which means:
+
+^               start of line (line=file.Basename)
+.*              0 to n any characters
+\W              one any non digit or letter (means special character)
+(?<Time>\d{1,}) one or more digits (this pattern must be named 'Time' to be used internally to fill the result objects property "Time")
+(?<Unit>ms|s)   'ms' or 's', unit of the afore mentioned Time (this pattern must be named 'Unit' to be used internally to fill the result objects property "Unit")
+$               end of line (line= file.Basename)
+
+.INPUTS
+
+None. Right now you cannot pipe objects to Get-PSLockScreenSlideShow
+
+.OUTPUTS
+
+a list of PSCustomObjects 
+
+[PSCustomObject]@{
+    Path = ...
+    Time = ...
+    Unit = ...
+}
+
+.EXAMPLE
+
+Get-PSLockScreenSlideShow
+
+Path                                                    Time Unit
+----                                                    ---- ----
+C:\ProgramData\PSLockScreenSlideShow\00-Show.jpg           5 s
+C:\ProgramData\PSLockScreenSlideShow\01-Show-5s.jpg        5 s
+C:\ProgramData\PSLockScreenSlideShow\02-Show-10s.jpg      10 s
+C:\ProgramData\PSLockScreenSlideShow\03-Show-5000ms.jpg 5000 ms
+
+assumed C:\ProgramData\PSLockScreenSlideShow contains the following files
+
+00-Show.jpg    
+01-Show-5s.jpg 
+02-Show-10s.jpg
+03-Show-5000ms.jpg 
+#>
+
 function Get-PSLockScreenSlideShow
 {
     [CmdletBinding()]
@@ -86,6 +155,41 @@ function Wait-PSLockScreenSlideShow
         Start-Sleep @Sleep
     }
 }
+
+
+<#
+.SYNOPSIS
+
+Set LockScreen image
+
+.DESCRIPTION
+
+Set LockScreen image
+
+.PARAMETER Path
+
+Specifiy the image filename to set as LockScreen image
+
+.INPUTS
+
+Image filename that should be set as LockScreen image
+
+.OUTPUTS
+
+None.
+
+.EXAMPLE
+
+"C:\ProgramData\PSLockScreenSlideShow\00-Show.jpg" | Set-PSLockScreenSlideShowImage 
+
+Set "C:\ProgramData\PSLockScreenSlideShow\00-Show.jpg" via pipeline as the actual LockScreen image
+
+.EXAMPLE
+
+Set-PSLockScreenSlideShowImage "C:\ProgramData\PSLockScreenSlideShow\00-Show.jpg"
+
+Set "C:\ProgramData\PSLockScreenSlideShow\00-Show.jpg" via parameter as the actual LockScreen image
+#>
 
 function Set-PSLockScreenSlideShowImage
 {
@@ -212,7 +316,7 @@ function Register-PSLockScreenSlideShowScheduledTask
 
                 $ActionArgs = . {
 
-                    "-ExecutionPolicy Bypass -WindowStyle Hidden -File $([System.IO.Path]::ChangeExtension($PSCommandPath, ".ps1"))"
+                    "-ExecutionPolicy Bypass -WindowStyle Hidden -File ""$([System.IO.Path]::ChangeExtension($PSCommandPath, ".ps1"))"""
 
                     foreach($key in $PSBoundParameters.Keys)
                     {
