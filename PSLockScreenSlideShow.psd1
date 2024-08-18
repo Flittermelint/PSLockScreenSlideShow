@@ -22,7 +22,7 @@
 Set single lockscreen image or display multiple images as slideshow.
 In contrast to the OS slideshow, each image will always be shown alone (no collage).
 Images will be displayed in the alphabetical order of the filenames (no randomness).
-Display time of each image can be individually be defined as part of the filename.
+Display time of each image can individually be defined as part of the filename.
 '@
 
     PowerShellVersion = '5.1'
