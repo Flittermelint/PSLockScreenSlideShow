@@ -1,5 +1,93 @@
 ﻿
+Add-Type -AssemblyName System.Windows.Forms
+
+Add-Type -AssemblyName System.Runtime.WindowsRuntime
+
 $Script:ModuleName = (Get-Item -Path $PSCommandPath).BaseName
+
+function Get-PSLockScreenMetrics
+{
+    $object = [System.Windows.Forms.Screen]::AllScreens | Where-Object Primary | Select-Object DeviceName, Bounds, WorkingArea, BitsPerPixel
+
+    $object | Add-Member -MemberType ScriptProperty -Name Width        -Value { $this.Bounds.Width  }
+    $object | Add-Member -MemberType ScriptProperty -Name Height       -Value { $this.Bounds.Height }
+
+    $object | Add-Member -MemberType ScriptProperty -Name Size         -Value {            "$($this.Width )x$( $this.Height)"   }
+    $object | Add-Member -MemberType ScriptProperty -Name Ratio        -Value { [Math]::Round($this.Width /    $this.Height, 2) }
+    $object | Add-Member -MemberType ScriptProperty -Name Portrait     -value {               $this.Width -lt  $this.Height     }
+    $object | Add-Member -MemberType ScriptProperty -Name Landscape    -value {               $this.Width -gt  $this.Height     }
+
+    $object | Add-Member -MemberType ScriptProperty -Name SortProperty -value { if($this.Landscape) { "Width" } else { "Height" } } 
+    $object
+}
+
+$Script:SlideShowRootPath = "$([System.Environment]::GetFolderPath([System.Environment+SpecialFolder]::CommonApplicationData))\$($Script:ModuleName)"
+
+function Set-PSLockScreenSlideShowPathRoot($Path)
+{
+    $Script:SlideShowRootPath = $Path
+}
+
+function Get-PSLockScreenSlideShowPathRoot
+{
+    $Script:SlideShowRootPath
+}
+
+function Get-PSLockScreenSlideShowPath
+{
+    if($path = Get-PSLockScreenSlideShowPathExactMatch) { return $path }
+    if($path = Get-PSLockScreenSlideShowPathBestMatch   ) { return $path }
+    if($path = Get-PSLockScreenSlideShowPathDefault        ) { return $path }
+
+    Get-PSLockScreenSlideShowPathRoot
+}
+
+function Get-PSLockScreenSlideShowPathDefault
+{
+    if($path = Get-ChildItem -Path (Get-PSLockScreenSlideShowPathRoot) -Filter Default -Directory)
+    {
+        $path.FullName
+    }
+}
+
+function Get-PSLockScreenSlideShowPathExactMatch
+{
+    if($path = Get-ChildItem -Path (Get-PSLockScreenSlideShowPathRoot) -Filter "$((Get-PSLockScreenMetrics).Size)" -Directory)
+    {
+        $path.FullName
+    }
+}
+
+function Get-PSLockScreenSlideShowPathBestMatch
+{
+    $LockScreen = Get-PSLockScreenMetrics
+
+    $groupedByRatioDeviation = Get-PSLockScreenSlideShowPathAllRes | Group-Object -Property { [Math]::Abs($_.Ratio - $LockScreen.Ratio) }
+
+    if($path = $groupedByRatioDeviation | Sort-Object -Property Name | Select-Object -First 1 | Select-Object -ExpandProperty Group | Sort-Object $LockScreen.SortProperty | Select-Object -Last 1)
+    {
+        $path.FullName
+    }
+}
+
+function Get-PSLockScreenSlideShowPathAllRes
+{
+    Get-ChildItem -Path (Get-PSLockScreenSlideShowPathRoot) -Directory | ForEach-Object {
+
+        if($_.BaseName -match "^(?<Width>\d{1,})x(?<Height>\d{1,})$")
+        {
+            [PSCustomObject]@{
+
+                FullName = $_.FullName
+
+                Width    = [Convert]::ToInt32($Matches.Width )
+                Height   = [Convert]::ToInt32($Matches.Height)
+
+                Ratio    = [Math]::Round($Matches.Width / $Matches.Height, 2)
+            }
+        }
+    }
+}
 
 <#
 .SYNOPSIS
@@ -74,7 +162,7 @@ function Get-PSLockScreenSlideShow
 {
     [CmdletBinding()]
 	Param (
-	    [Parameter()][string]$Path      =  "$([System.Environment]::GetFolderPath([System.Environment+SpecialFolder]::CommonApplicationData))\$($Script:ModuleName)",
+	    [Parameter()][string]$Path      = (Get-PSLockScreenSlideShowPath),
 	    [Parameter()][string]$Time      = "5s",
 	    [Parameter()][string]$TimeRegEx = "^.*\W(?<Time>\d{1,})(?<Unit>ms|s)$"
     )
@@ -155,7 +243,6 @@ function Wait-PSLockScreenSlideShow
         Start-Sleep @Sleep
     }
 }
-
 
 <#
 .SYNOPSIS
@@ -279,6 +366,39 @@ function Start-PSLockScreenSlideShow
     }
 }
 
+<#
+.SYNOPSIS
+
+Register PSLockScreen ScheduledTasks
+
+.DESCRIPTION
+
+Register PSLockScreen ScheduledTasks
+
+   \PSLockScreenSlideShow\Lock   (triggered on   lock)
+   \PSLockScreenSlideShow\Unlock (triggered on unlock)
+
+.PARAMETER Path
+
+see Get-PSLockScreenSlideShow
+
+.PARAMETER Time
+
+see Get-PSLockScreenSlideShow
+
+.PARAMETER TimeRegEx
+
+see Get-PSLockScreenSlideShow
+
+.INPUTS
+
+None.
+
+.OUTPUTS
+
+None.
+#>
+
 function Register-PSLockScreenSlideShowScheduledTask
 {
     [CmdletBinding()]
@@ -367,6 +487,26 @@ function Register-PSLockScreenSlideShowScheduledTask
     ) | ForEach-Object { Register-ScheduledTask @_ -ErrorAction SilentlyContinue }
 }
 
+<#
+.SYNOPSIS
+
+Unregister PSLockScreen ScheduledTasks
+
+.DESCRIPTION
+
+Unregister PSLockScreen ScheduledTasks
+
+   \PSLockScreenSlideShow\Lock   (triggered on   lock)
+   \PSLockScreenSlideShow\Unlock (triggered on unlock)
+
+.INPUTS
+
+None.
+
+.OUTPUTS
+
+None.
+#>
 function Unregister-PSLockScreenSlideShowScheduledTask
 {
     Unregister-ScheduledTask -TaskPath "\$($Script:ModuleName)\" -TaskName "Lock"   -Confirm:$false -ErrorAction SilentlyContinue
